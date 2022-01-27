@@ -21,7 +21,7 @@ def mock_in_heroku_headers(req):
 
 
 def extract_header_value(req, header_key: str):
-    values = [value for key, value in req.headers if key == header_key]
+    values = [value for key, value in req.headers if key.lower() == header_key.lower()]
     return values[0] if len(values) > 0 else None
 
 

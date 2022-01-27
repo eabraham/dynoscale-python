@@ -51,12 +51,13 @@ class DynoscaleAgent:
         print(f"thread-{threading.get_native_id()}: pre_request")
         if self.mode is Mode.DEVELOPMENT:
             mock_in_heroku_headers(req)
-        x_request_start = extract_header_value(req, X_REQUEST_START)
         x_request_id = extract_header_value(req, X_REQUEST_ID)
         if x_request_id is None:
             # id is necessary, create one add it to the header
             x_request_id = str(uuid.uuid4())
             write_header_value(req, X_REQUEST_ID, x_request_id)
+        x_request_start = extract_header_value(req, X_REQUEST_START)
+        print(f"{X_REQUEST_START} is {x_request_start}")
         if x_request_start is not None:
             self.logger.on_request_start(x_request_id, int(x_request_start))  # TODO: Guard against parse failures
         self.logger.on_request_received(x_request_id)
