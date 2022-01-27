@@ -1,9 +1,10 @@
-import math
+import datetime
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from pprint import pprint
+
+import math
 
 
 class EventType(Enum):
@@ -36,7 +37,7 @@ class RequestLog:
 
 class RequestLogRepository:
     """Storage for logs regarding the lifecycle of requests"""
-    request_logs: dict
+    request_logs: dict[str, list[tuple[int, EventType]]]
 
     def __init__(self):
         print(f"thread-{threading.get_native_id()}: Initializing RequestLogRepository")
@@ -45,10 +46,9 @@ class RequestLogRepository:
     def add_request_event(self, request_id: str, event: Event):
         print(f"thread-{threading.get_native_id()}: RequestLogRepository.add_request_event")
         if request_id not in self.request_logs:
-            self.request_logs[request_id] = RequestLog(request_id)
-        request_log = self.request_logs[request_id]
-        request_log.append(event)
-        pprint(self.request_logs)
+            self.request_logs[request_id] = []
+        self.request_logs[request_id].append((event.event_time_ms, event.event_type))
+        self.dump_logs()
 
     def delete_request_logs(self, request_ids: list):
         """Delete request logs for requests with provided request_id.
@@ -56,6 +56,16 @@ class RequestLogRepository:
         print(f"thread-{threading.get_native_id()}: RequestLogRepository.delete_request_logs")
         for key_to_delete in [key for key in self.request_logs if key in request_ids]:
             del self.request_logs[key_to_delete]
+
+    def dump_logs(self):
+        print('╔' + '=' * 99)
+        print(F"║ Log dump of RequestRepository:{id(self)} at {datetime.datetime.utcnow()}")
+        i = 0
+        for req_id in self.request_logs:
+            str_events = [f"{event_type.name}, {event_time}" for event_time, event_type in self.request_logs[req_id]]
+            print(f"║ {i:03} {req_id}, {', '.join(str_events)}")
+            i += 1
+        print('╚' + '=' * 99)
 
 
 class EventLogger:
