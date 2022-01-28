@@ -41,12 +41,14 @@ class EventUploader:
 
     def keep_uploading(self, self_in):
         dlog(f"EventUploader<{id(self)}>.keep_uploading - Starting to upload")
+        repo = RequestLogRepository()
+
         while True:
             if self.event.is_set():
                 dlog(f"EventUploader<{id(self)}>.keep_uploading - event set, stopping")
                 break
             time.sleep(self.upload_interval)
-            self_in.upload_logs()
+            repo.dump_logs()
 
     def upload_logs(self):
         dlog(f"EventUploader<{id(self)}>.upload_logs")

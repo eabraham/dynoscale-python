@@ -32,4 +32,4 @@ def write_header_value(req, key: str, value: str):
 
 
 def dlog(msg: str):
-    print(f"ppid-{os.getppid():03} pid-{os.getpid():03} thread-{threading.get_native_id():03}: {msg}")
+    print(f"pid-{os.getpid():03} ppid-{os.getppid():03} thread-{threading.get_ident():03}: {msg}")

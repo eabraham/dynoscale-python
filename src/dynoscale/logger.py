@@ -1,10 +1,10 @@
 import datetime
-import threading
+import math
 import time
 from dataclasses import dataclass
 from enum import Enum
 
-import math
+from permadict import Permadict
 
 from dynoscale.utils import dlog
 
@@ -23,35 +23,38 @@ class LogEvent:
     value: dict
 
 
-class RequestLog:
-    request_id: int
-    request_events: list
-
-    def __init__(self, request_id):
-        self.request_id = request_id
-        self.request_events = []
-
-    def append(self, request_event: LogEvent):
-        self.request_events.append(request_event)
-
-    def __repr__(self):
-        return f"{{request_id:{repr(self.request_id)}, request_events:{repr(self.request_events)}}}"
-
-
+# class RequestLog:
+#     request_id: int
+#     request_events: list[LogEvent]
+#
+#     def __init__(self, request_id):
+#         self.request_id = request_id
+#         self.request_events = []
+#
+#     def append(self, request_event: LogEvent):
+#         self.request_events.append(request_event)
+#
+#     def __repr__(self):
+#         return f"{{request_id:{repr(self.request_id)}, request_events:{repr(self.request_events)}}}"
+#
+#
 class RequestLogRepository:
     """Storage for logs regarding the lifecycle of requests"""
-    request_logs: dict[str, list[tuple[int, EventType]]]
+    # request_logs: dict[str, list[tuple[int, EventType]]]
+    request_logs: Permadict
 
     def __init__(self):
         dlog(f"RequestLogRepository<{id(self)}>.__init__")
-        self.request_logs = {}
+        self.request_logs = Permadict('dynoscale.sqlite3')
 
     def add_request_event(self, request_id: str, event: LogEvent):
         dlog(f"RequestLogRepository<{id(self)}>.add_request_event")
-        if request_id not in self.request_logs:
-            self.request_logs[request_id] = []
-        self.request_logs[request_id].append((event.event_time_ms, event.event_type))
-        self.dump_logs()
+        req_events = self.request_logs.get(request_id)
+        if req_events is None:
+            req_events = []
+        req_events.append(event)
+        self.request_logs[request_id] = req_events
+        # self.dump_logs()
 
     def delete_request_logs(self, request_ids: list):
         """Delete request logs for requests with provided request_id.
@@ -61,14 +64,27 @@ class RequestLogRepository:
             del self.request_logs[key_to_delete]
 
     def dump_logs(self):
+        dlog(f"RequestLogRepository<{id(self)}>.dump_logs")
         print('╔' + '=' * 99)
         print(F"║ Log dump of RequestRepository:{id(self)} at {datetime.datetime.utcnow()}")
         i = 0
-        for req_id in self.request_logs:
-            str_events = [f"{event_type.name}, {event_time}" for event_time, event_type in self.request_logs[req_id]]
+        request_log_items = self.request_logs.items()
+        to_delete = []
+        for req_id, req_events in request_log_items:
+
+            # Filter out un-processed requests #TODO: Make sure this is not a memory leak! Since we only delete dumped
+            #  requests there might be a growing number of leftovers
+            if not bool([True for event in req_events if event.event_type == EventType.REQUEST_PROCESSED]):
+                continue
+
+            str_events = [f"{event.event_type.name}, {event.event_time_ms}" for event in req_events]
             print(f"║ {i:03} {req_id}, {', '.join(str_events)}")
             i += 1
+            to_delete.append(req_id)
         print('╚' + '=' * 99)
+
+        # delete
+        self.delete_request_logs(to_delete)
 
 
 class EventLogger:
