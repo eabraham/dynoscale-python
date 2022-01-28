@@ -1,5 +1,7 @@
 import math
+import os
 import random
+import threading
 import time
 import uuid
 
@@ -27,3 +29,7 @@ def extract_header_value(req, header_key: str):
 
 def write_header_value(req, key: str, value: str):
     req.headers.append((key, value))
+
+
+def dlog(msg: str):
+    print(f"ppid-{os.getppid():05} pid-{os.getpid():05} thread-{threading.get_native_id()}: {msg}")

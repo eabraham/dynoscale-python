@@ -6,14 +6,17 @@ from enum import Enum
 
 import math
 
+from dynoscale.utils import dlog
+
 
 class EventType(Enum):
     X_REQUEST_START = 10
     REQUEST_RECEIVED = 20
+    REQUEST_PROCESSED = 30
 
 
 @dataclass
-class Event:
+class LogEvent:
     """Dynoscale Log Event"""
     event_time_ms: int
     event_type: EventType
@@ -28,7 +31,7 @@ class RequestLog:
         self.request_id = request_id
         self.request_events = []
 
-    def append(self, request_event: Event):
+    def append(self, request_event: LogEvent):
         self.request_events.append(request_event)
 
     def __repr__(self):
@@ -40,11 +43,11 @@ class RequestLogRepository:
     request_logs: dict[str, list[tuple[int, EventType]]]
 
     def __init__(self):
-        print(f"thread-{threading.get_native_id()}: Initializing RequestLogRepository")
+        dlog(f"RequestLogRepository<{id(self)}>.__init__")
         self.request_logs = {}
 
-    def add_request_event(self, request_id: str, event: Event):
-        print(f"thread-{threading.get_native_id()}: RequestLogRepository.add_request_event")
+    def add_request_event(self, request_id: str, event: LogEvent):
+        dlog(f"RequestLogRepository<{id(self)}>.add_request_event")
         if request_id not in self.request_logs:
             self.request_logs[request_id] = []
         self.request_logs[request_id].append((event.event_time_ms, event.event_type))
@@ -53,7 +56,7 @@ class RequestLogRepository:
     def delete_request_logs(self, request_ids: list):
         """Delete request logs for requests with provided request_id.
         Call this after successful upload"""
-        print(f"thread-{threading.get_native_id()}: RequestLogRepository.delete_request_logs")
+        dlog(f"RequestLogRepository<{id(self)}>.delete_request_logs")
         for key_to_delete in [key for key in self.request_logs if key in request_ids]:
             del self.request_logs[key_to_delete]
 
@@ -72,21 +75,28 @@ class EventLogger:
     """Provides the smallest subset of hooks necessary"""
 
     def __init__(self, repository: RequestLogRepository):
-        print(f"thread-{threading.get_native_id()}: Initializing EventLogger")
+        dlog(f"EventLogger<{id(self)}>.__init__")
         self.repository = repository
 
     def on_request_start(self, request_id: str, request_start: int):
-        print(f"thread-{threading.get_native_id()}: EventLogger.on_request_start")
+        dlog(f"EventLogger<{id(self)}>.on_request_start")
         self.repository.add_request_event(
             request_id,
-            Event(request_start, EventType.X_REQUEST_START, {})
+            LogEvent(request_start, EventType.X_REQUEST_START, {})
         )
 
     def on_request_received(self, request_id: str):
-        print(f"thread-{threading.get_native_id()}: EventLogger.on_request_received")
+        dlog(f"EventLogger<{id(self)}>.on_request_received")
         self.repository.add_request_event(
             request_id,
-            Event(epoch_ms(), EventType.REQUEST_RECEIVED, {})
+            LogEvent(epoch_ms(), EventType.REQUEST_RECEIVED, {})
+        )
+
+    def on_request_processed(self, request_id: str):
+        dlog(f"EventLogger<{id(self)}>.on_request_processed")
+        self.repository.add_request_event(
+            request_id,
+            LogEvent(epoch_ms(), EventType.REQUEST_PROCESSED, {})
         )
 
 
