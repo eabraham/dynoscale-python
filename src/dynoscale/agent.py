@@ -1,12 +1,11 @@
 import os
-import uuid
 from enum import Enum
 
 from dynoscale.const.env import ENV_DEV_MODE, ENV_DYNOSCALE_URL
-from dynoscale.const.header import X_REQUEST_ID, X_REQUEST_START
+from dynoscale.const.header import X_REQUEST_START
 from dynoscale.logger import EventLogger
 from dynoscale.reporter import DynoscaleReporter
-from dynoscale.utils import dlog, mock_in_heroku_headers, extract_header_value, write_header_value
+from dynoscale.utils import dlog, mock_in_heroku_headers, extract_header_value, epoch_ms
 
 
 class ConfigMode(Enum):
@@ -106,30 +105,23 @@ class DynoscaleAgent:
             f"DynoscaleAgent<{id(self)}>.post_fork (s:{id(server)} s.pid{server.pid} w:{id(worker)} w.pid{worker.pid})")
         server.log.info("Worker spawned (pid: %s)", worker.pid)
         self.role = AgentRole.WORKER
-        # self.config()
-        # self.uploader.stop()
 
     def post_worker_init(self, worker):
         dlog(f"DynoscaleAgent<{id(self)}>.post_worker_init (w:{id(worker)} w.pid{worker.pid})")
 
     def pre_request(self, worker, req):
         dlog(f"DynoscaleAgent<{id(self)}>.pre_request (w:{id(worker)} w.pid{worker.pid} rq:{id(req)})")
+        req_received = epoch_ms()
         if self.mode is ConfigMode.DEVELOPMENT:
             mock_in_heroku_headers(req)
-        x_request_id = extract_header_value(req, X_REQUEST_ID)
-        if x_request_id is None:
-            # id is required, create one add it to the header #TODO: Add adding id as an event?
-            x_request_id = str(uuid.uuid4())
-            write_header_value(req, X_REQUEST_ID, x_request_id)
         x_request_start = extract_header_value(req, X_REQUEST_START)
         if x_request_start is not None:
-            self.logger.on_request_start(x_request_id, int(x_request_start))  # TODO: Guard against parse failures
-        self.logger.on_request_received(x_request_id)
+            req_queue_time: int = req_received - int(x_request_start)
+            self.logger.on_request_received(int(req_received / 1_000), req_queue_time)
 
     def post_request(self, worker, req, environ, resp):
         dlog(
             f"DynoscaleAgent<{id(self)}>.post_request (w:{id(worker)} w.pid{worker.pid} rq:{id(req)} e:{id(environ)} rs:{id(resp)})")
-        self.logger.on_request_processed(extract_header_value(req, X_REQUEST_ID))
 
     def worker_int(self, worker):
         dlog(f"DynoscaleAgent<{id(self)}>.worker_int (w:{id(worker)} w.pid{worker.pid})")

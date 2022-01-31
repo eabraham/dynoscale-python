@@ -1,45 +1,26 @@
 import csv
 import datetime
-import math
 import threading
 import time
 from io import StringIO
 from threading import Thread
-from typing import Optional
+from typing import Optional, Iterable, Tuple
 from urllib.request import Request
 
-from requests import Request, Session, PreparedRequest
+from requests import Request, Session, PreparedRequest, Response
 
 from dynoscale import __version__
-from dynoscale.logger import LogEvent, EventType, RequestLogRepository
+from dynoscale.logger import RequestLogRepository
 from dynoscale.utils import dlog
 
 DEFAULT_REPORT_PERIOD = 15
 
 
-def logs_to_csv(logs: dict[str, list[LogEvent]]) -> str:
+def logs_to_csv(logs: Iterable[Tuple[int, int, str, str]]) -> str:
     """Generates a csv formatted string from logs"""
-    rows = []
-    for req_id, events in logs.items():
-        req_start: Optional[int] = next(
-            (event.event_time_ms for event in events if event.event_type == EventType.REQUEST_START),
-            None
-        )
-        req_received: Optional[int] = next(
-            (event.event_time_ms for event in events if event.event_type == EventType.REQUEST_RECEIVED),
-            None
-        )
-
-        if req_start is None or req_received is None:
-            continue
-
-        req_queue_time = req_received - req_start
-        rows.append((math.floor(req_start / 1000), req_queue_time, 'web', ''))
-    rows = sorted(rows, key=lambda columns: columns[0])
-
     buffer = StringIO()
     csv_writer = csv.writer(buffer)
-    csv_writer.writerows(rows)
+    csv_writer.writerows(logs)
     return buffer.getvalue()
 
 
@@ -91,14 +72,19 @@ class DynoscaleReporter:
             if self.event.is_set():
                 dlog(f"DynoscaleReporter<{id(self)}>._upload_forever")
                 break
+            # TODO: be smarter about the sleep, add another loop inside and check for event more often
+            # TODO: need to check more often so that when signalled to stop we don't have to wait report_period time
             time.sleep(self.report_period)
-            logs = dict(repository.get_logs_with_event_types((EventType.REQUEST_START, EventType.REQUEST_RECEIVED)))
-            payload = logs_to_csv(logs)
+            queue_times = repository.get_queue_times()
+            payload = logs_to_csv(queue_times)
             dlog(f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()})")
             if payload:
-                self.upload_payload(payload)
+                response = self.upload_payload(payload)
+                if response and response.ok:
+                    latest_timestamp = queue_times[-1][0]
+                    repository.delete_queue_times_before(latest_timestamp)
 
-    def upload_payload(self, payload: str):
+    def upload_payload(self, payload: str) -> Optional[Response]:
         dlog(f"DynoscaleReporter<{id(self)}>.upload_payload")
         if not payload:
             dlog(f"DynoscaleReporter<{id(self)}>.upload_payload empty payload, exiting")
@@ -118,3 +104,4 @@ class DynoscaleReporter:
         pprint_req(prepared)
         response = self.session.send(prepared)
         dlog(f"DynoscaleReporter<{id(self)}>.upload_payload response status code:{response.status_code}")
+        return response
