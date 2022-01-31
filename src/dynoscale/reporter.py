@@ -6,7 +6,11 @@ import time
 from io import StringIO
 from threading import Thread
 from typing import Optional
+from urllib.request import Request
 
+from requests import Request, Session, PreparedRequest
+
+from dynoscale import __version__
 from dynoscale.logger import LogEvent, EventType, RequestLogRepository
 from dynoscale.utils import dlog
 
@@ -30,13 +34,22 @@ def logs_to_csv(logs: dict[str, list[LogEvent]]) -> str:
             continue
 
         req_queue_time = req_received - req_start
-        rows.append((math.floor(req_start / 1000), req_queue_time, 'dyno.1', ''))
+        rows.append((math.floor(req_start / 1000), req_queue_time, 'web', ''))
     rows = sorted(rows, key=lambda columns: columns[0])
 
     buffer = StringIO()
     csv_writer = csv.writer(buffer)
     csv_writer.writerows(rows)
     return buffer.getvalue()
+
+
+def pprint_req(req: PreparedRequest):
+    print('{}\n{}\r\n{}\r\n\r\n{}'.format(
+        '-----------START-----------',
+        req.method + ' ' + req.url,
+        '\r\n'.join('{}: {}'.format(k, v) for k, v in req.headers.items()),
+        req.body,
+    ))
 
 
 class DynoscaleReporter:
@@ -52,6 +65,7 @@ class DynoscaleReporter:
         self.report_period = report_period
         self.event = threading.Event()
         self.thread: Optional[threading.Thread] = None
+        self.session = Session()
         if autostart:
             self.start()
 
@@ -81,8 +95,26 @@ class DynoscaleReporter:
             logs = dict(repository.get_logs_with_event_types((EventType.REQUEST_START, EventType.REQUEST_RECEIVED)))
             payload = logs_to_csv(logs)
             dlog(f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()})")
-            self.upload_payload(payload)
+            if payload:
+                self.upload_payload(payload)
 
     def upload_payload(self, payload: str):
         dlog(f"DynoscaleReporter<{id(self)}>.upload_payload")
-        print(payload)
+        if not payload:
+            dlog(f"DynoscaleReporter<{id(self)}>.upload_payload empty payload, exiting")
+            return
+        headers = {
+            'Content-Type': 'text/csv',
+            'User-Agent': f"dynoscale-python;{__version__}",
+        }
+
+        request: Request = Request(
+            method='POST',
+            url=self.api_url,
+            headers=headers,
+            data=payload
+        )
+        prepared: PreparedRequest = self.session.prepare_request(request)
+        pprint_req(prepared)
+        response = self.session.send(prepared)
+        dlog(f"DynoscaleReporter<{id(self)}>.upload_payload response status code:{response.status_code}")
