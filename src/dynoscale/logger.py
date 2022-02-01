@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from typing import Tuple
+from typing import Tuple, Iterable
 
 from dynoscale.const.env import ENV_HEROKU_DYNO
 from dynoscale.utils import dlog
@@ -22,6 +22,7 @@ class EventLogger:
         self.repository.add_queue_time(timestamp, queue_time)
 
 
+# noinspection SqlNoDataSourceInspection,SqlResolve
 class RequestLogRepository:
     """Storage for logs regarding the lifecycle of requests"""
 
@@ -37,7 +38,7 @@ class RequestLogRepository:
         with self.conn:
             self.conn.execute(
                 'CREATE TABLE IF NOT EXISTS logs'
-                '(timestamp INTEGER PRIMARY KEY , metric INTEGER, source STRING, metadata STRING)'
+                '(timestamp INTEGER, metric INTEGER, source STRING, metadata STRING)'
             )
 
     def add_queue_time(self, timestamp: int, queue_time: int):
@@ -48,15 +49,15 @@ class RequestLogRepository:
                 (timestamp, queue_time, "web", "")
             )
 
-    def get_queue_times(self) -> list[Tuple[int, int, str, str]]:
+    def get_queue_times(self) -> Tuple[Tuple[int, int, int, str, str]]:
         with self.conn:
-            cur = self.conn.execute("SELECT timestamp, metric, source, metadata FROM logs ORDER BY timestamp ")
-            return [(r[0], r[1], r[2], r[3]) for r in cur.fetchall()]
+            cur = self.conn.execute("SELECT rowid, timestamp, metric, source, metadata FROM logs ORDER BY timestamp ")
+            return tuple((int(r[0]), int(r[1]), int(r[2]), str(r[3]), str(r[4])) for r in cur.fetchall())
 
-    def delete_queue_times_before(self, timestamp: int):
-        dlog(f"RequestLogRepository<{id(self)}>.delete_logs_before {timestamp}")
+    def delete_queue_times(self, row_ids: Iterable[int]):
+        dlog(f"RequestLogRepository<{id(self)}>.delete_que_times {row_ids}")
+        if not row_ids:
+            return
+        row_id_tuples = [(row_id,) for row_id in row_ids]
         with self.conn:
-            self.conn.execute(
-                'DELETE FROM logs WHERE timestamp <?',
-                (timestamp,)
-            )
+            self.conn.executemany('DELETE FROM logs WHERE rowid = (?)', row_id_tuples)

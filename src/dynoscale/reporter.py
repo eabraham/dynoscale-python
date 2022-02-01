@@ -4,7 +4,7 @@ import threading
 import time
 from io import StringIO
 from threading import Thread
-from typing import Optional, Iterable, Tuple
+from typing import Optional, Iterable
 from urllib.request import Request
 
 from requests import Request, Session, PreparedRequest, Response
@@ -16,7 +16,7 @@ from dynoscale.utils import dlog
 DEFAULT_REPORT_PERIOD = 15
 
 
-def logs_to_csv(logs: Iterable[Tuple[int, int, str, str]]) -> str:
+def logs_to_csv(logs: Iterable[Iterable]) -> str:
     """Generates a csv formatted string from logs"""
     buffer = StringIO()
     csv_writer = csv.writer(buffer)
@@ -75,14 +75,18 @@ class DynoscaleReporter:
             # TODO: be smarter about the sleep, add another loop inside and check for event more often
             # TODO: need to check more often so that when signalled to stop we don't have to wait report_period time
             time.sleep(self.report_period)
-            queue_times = repository.get_queue_times()
-            payload = logs_to_csv(queue_times)
-            dlog(f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()})")
-            if payload:
-                response = self.upload_payload(payload)
-                if response and response.ok:
-                    latest_timestamp = queue_times[-1][0]
-                    repository.delete_queue_times_before(latest_timestamp)
+            logs_with_ids = repository.get_queue_times()
+            # If there is nothing to report, exit
+            if not logs_with_ids:
+                dlog(
+                    f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()}) - nothing to upload")
+                continue
+            ids, logs = zip(*[(q[0], q[1:]) for q in logs_with_ids])
+            payload = logs_to_csv(logs)
+            dlog(f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()}) - uploading")
+            response = self.upload_payload(payload)
+            if response and response.ok:
+                repository.delete_queue_times(ids)
 
     def upload_payload(self, payload: str) -> Optional[Response]:
         dlog(f"DynoscaleReporter<{id(self)}>.upload_payload")
