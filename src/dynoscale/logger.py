@@ -61,3 +61,10 @@ class RequestLogRepository:
         row_id_tuples = [(row_id,) for row_id in row_ids]
         with self.conn:
             self.conn.executemany('DELETE FROM logs WHERE rowid = (?)', row_id_tuples)
+            self.conn.execute('VACUUM')
+
+    def delete_queue_times_before(self, time: float):
+        dlog(f"RequestLogRepository<{id(self)}>.delete_que_times_before {time}")
+        with self.conn:
+            self.conn.execute('DELETE FROM logs WHERE timestamp < (?)', (int(time),))
+            self.conn.execute('VACUUM')

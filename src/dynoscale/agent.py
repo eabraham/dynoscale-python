@@ -78,8 +78,7 @@ class DynoscaleAgent:
         # TODO: What happens when unsuccessful?
 
         self.logger = EventLogger()
-        # self.uploader = EventUploader(repository=RequestLogRepository(), upload_interval=15, autostart=True)
-        self.reporter = DynoscaleReporter(api_url=self.api_url, report_period=10, autostart=True)
+        self.reporter = DynoscaleReporter(api_url=self.api_url, autostart=True)
 
     # Hook methods listed in order of execution
     # STARTUP: nworkers_changed, on_starting, when_ready, pre_fork (* workers) - up to here runs on server (main)
