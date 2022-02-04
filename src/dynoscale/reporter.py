@@ -95,7 +95,7 @@ class DynoscaleReporter:
             while True:
                 # TODO: be smarter about the sleep, add another loop inside and check for event more often
                 # TODO: need to check more often so that when signalled to stop we don't have to wait report_period time
-                time.sleep(self.report_period)
+                await asyncio.sleep(self.report_period)
                 logs_with_ids = self.repository.get_queue_times()
                 # If there is nothing to report, exit
                 if not logs_with_ids:
@@ -120,29 +120,6 @@ class DynoscaleReporter:
         except asyncio.CancelledError:
             dlog(f"DynoscaleReporter<{id(self)}>._vacuuming_coro ({datetime.datetime.utcnow()}) - cancelled")
 
-    # def _upload_forever(self):
-    #     dlog(f"DynoscaleReporter<{id(self)}>._upload_forever")
-    #     repository = RequestLogRepository()
-    #     while True:
-    #         if self.event.is_set():
-    #             dlog(f"DynoscaleReporter<{id(self)}>._upload_forever")
-    #             break
-    #         # TODO: be smarter about the sleep, add another loop inside and check for event more often
-    #         # TODO: need to check more often so that when signalled to stop we don't have to wait report_period time
-    #         time.sleep(self.report_period)
-    #         logs_with_ids = repository.get_queue_times()
-    #         # If there is nothing to report, exit
-    #         if not logs_with_ids:
-    #             dlog(
-    #                 f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()}) - nothing to upload")
-    #             continue
-    #         ids, logs = zip(*[(q[0], q[1:]) for q in logs_with_ids])
-    #         payload = logs_to_csv(logs)
-    #         dlog(f"DynoscaleReporter<{id(self)}>._upload_forever ({datetime.datetime.utcnow()}) - uploading")
-    #         response = self.upload_payload(payload)
-    #         if response and response.ok:
-    #             repository.delete_queue_times(ids)
-    #
     def upload_payload(self, payload: str) -> Optional[Response]:
         dlog(f"DynoscaleReporter<{id(self)}>.upload_payload")
         if not payload:
