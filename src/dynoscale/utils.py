@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 import random
@@ -5,6 +6,8 @@ import threading
 import time
 
 from dynoscale.const.header import X_REQUEST_START
+
+logger = logging.getLogger(__name__)
 
 
 # TODO: Decide if I should keep this for devs to test locally or remove
@@ -40,5 +43,29 @@ def epoch_ns():
     return time.time_ns()
 
 
-def dlog(msg: str):
-    print(f"pid-{os.getpid():03} ppid-{os.getppid():03} thread-{threading.get_ident():03}: {msg}")
+def prepend_thread_info(msg: str):
+    return f"t{threading.get_ident()} {msg}"
+
+
+def prepend_process_info(msg: str):
+    return f"p{os.getpid()} pp{os.getppid()} {msg}"
+
+
+def log_d(msg: str):
+    logger.debug(msg=prepend_process_info(prepend_thread_info(msg)))
+
+
+def log_i(msg: str):
+    logger.info(msg=prepend_process_info(prepend_thread_info(msg)))
+
+
+def log_w(msg: str):
+    logger.warning(msg=prepend_process_info(prepend_thread_info(msg)))
+
+
+def log_e(msg: str):
+    logger.error(msg=prepend_process_info(prepend_thread_info(msg)))
+
+
+def log_c(msg: str):
+    logger.critical(msg=prepend_process_info(prepend_thread_info(msg)))
